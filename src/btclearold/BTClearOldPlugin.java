@@ -14,22 +14,29 @@ import com.biglybt.pif.ui.config.BooleanParameter;
 import com.biglybt.pif.ui.config.IntParameter;
 import com.biglybt.pif.ui.config.Parameter;
 import com.biglybt.pif.ui.config.ParameterListener;
+import com.biglybt.pif.ui.config.StringListParameter;
 import com.biglybt.pif.ui.model.BasicPluginConfigModel;
+import com.biglybt.pif.utils.LocaleUtilities;
 import com.biglybt.pif.utils.UTTimer;
 import com.biglybt.pif.utils.UTTimerEvent;
 import com.biglybt.pif.utils.UTTimerEventPerformer;
 
 public class BTClearOldPlugin implements UnloadablePlugin {
 
-    private static final long MS_PER_DAY = 24L * 60L * 60L * 1000L;
+    private static final long MS_PER_HOUR = 60L * 60L * 1000L;
+    private static final long MS_PER_DAY  = 24L * MS_PER_HOUR;
+
+    private static final String UNIT_HOURS = "hours";
+    private static final String UNIT_DAYS  = "days";
 
     private PluginInterface pi;
     private LoggerChannel log;
     private BasicPluginConfigModel configModel;
 
-    private BooleanParameter pEnabled;
-    private IntParameter pDeleteAfterDays;
-    private IntParameter pCheckIntervalMinutes;
+    private BooleanParameter    pEnabled;
+    private IntParameter        pDeleteAfterAmount;
+    private StringListParameter pDeleteAfterUnit;
+    private IntParameter        pCheckIntervalMinutes;
     private BooleanParameter pOnlyIfStopped;
     private BooleanParameter pDeleteData;
     private BooleanParameter pDeleteTorrentFile;
@@ -45,12 +52,19 @@ public class BTClearOldPlugin implements UnloadablePlugin {
         this.log = pi.getLogger().getChannel("BTClearOld");
         log.setDiagnostic();
 
-        pi.getUtilities().getLocaleUtilities().integrateLocalisedMessageBundle("btclearold.Messages");
+        LocaleUtilities loc = pi.getUtilities().getLocaleUtilities();
+        loc.integrateLocalisedMessageBundle("btclearold.Messages");
 
         configModel = pi.getUIManager().createBasicPluginConfigModel("plugins", "btclearold.name");
 
         pEnabled              = configModel.addBooleanParameter2("btclearold.enabled",              "btclearold.enabled",              true);
-        pDeleteAfterDays      = configModel.addIntParameter2    ("btclearold.delete_after_days",    "btclearold.delete_after_days",    14);
+        pDeleteAfterAmount    = configModel.addIntParameter2    ("btclearold.delete_after_amount",  "btclearold.delete_after_amount",  12);
+        pDeleteAfterUnit      = configModel.addStringListParameter2(
+                "btclearold.delete_after_unit", "btclearold.delete_after_unit",
+                new String[] { UNIT_HOURS, UNIT_DAYS },
+                new String[] { loc.getLocalisedMessageText("btclearold.unit.hours"),
+                               loc.getLocalisedMessageText("btclearold.unit.days") },
+                UNIT_HOURS);
         pCheckIntervalMinutes = configModel.addIntParameter2    ("btclearold.check_interval_min",   "btclearold.check_interval_min",   60);
         pOnlyIfStopped        = configModel.addBooleanParameter2("btclearold.only_if_stopped",      "btclearold.only_if_stopped",      false);
         pDeleteTorrentFile    = configModel.addBooleanParameter2("btclearold.delete_torrent_file",  "btclearold.delete_torrent_file",  true);
@@ -75,7 +89,7 @@ public class BTClearOldPlugin implements UnloadablePlugin {
         startTimer();
 
         log.log("BTClearOld initialized (every " + pCheckIntervalMinutes.getValue()
-                + " min, removing completed older than " + pDeleteAfterDays.getValue() + " days)");
+                + " min, removing completed older than " + pDeleteAfterAmount.getValue() + " " + pDeleteAfterUnit.getValue() + ")");
     }
 
     private void startTimer() {
@@ -115,13 +129,15 @@ public class BTClearOldPlugin implements UnloadablePlugin {
     private void scan() {
         if (unloaded || !pEnabled.getValue()) return;
 
-        int days = pDeleteAfterDays.getValue();
-        if (days <= 0) {
-            log.log("Skipping scan: delete_after_days = " + days);
+        int amount = pDeleteAfterAmount.getValue();
+        if (amount <= 0) {
+            log.log("Skipping scan: delete_after_amount = " + amount);
             return;
         }
-
-        long cutoff = System.currentTimeMillis() - (days * MS_PER_DAY);
+        String unit = pDeleteAfterUnit.getValue();
+        long unitMs = UNIT_DAYS.equals(unit) ? MS_PER_DAY : MS_PER_HOUR;
+        long thresholdMs = amount * unitMs;
+        long cutoff = System.currentTimeMillis() - thresholdMs;
         boolean dryRun         = pDryRun.getValue();
         boolean onlyIfStopped  = pOnlyIfStopped.getValue();
         boolean deleteData     = pDeleteData.getValue();
@@ -148,10 +164,12 @@ public class BTClearOldPlugin implements UnloadablePlugin {
             int state = d.getState();
             if (onlyIfStopped && state != Download.ST_STOPPED && state != Download.ST_ERROR) continue;
 
-            long ageDays = (System.currentTimeMillis() - completedTime) / MS_PER_DAY;
+            long ageMs    = System.currentTimeMillis() - completedTime;
+            long ageHours = ageMs / MS_PER_HOUR;
+            String ageStr = ageHours >= 48 ? (ageMs / MS_PER_DAY) + " days" : ageHours + " hours";
 
             if (dryRun) {
-                log.log("[DRY-RUN] Would remove: '" + d.getName() + "' (completed " + ageDays + " days ago)");
+                log.log("[DRY-RUN] Would remove: '" + d.getName() + "' (completed " + ageStr + " ago)");
                 continue;
             }
 
@@ -161,7 +179,7 @@ public class BTClearOldPlugin implements UnloadablePlugin {
                 }
                 d.remove(deleteTorrent, deleteData);
                 removed++;
-                log.log("Removed '" + d.getName() + "' (completed " + ageDays + " days ago)");
+                log.log("Removed '" + d.getName() + "' (completed " + ageStr + " ago)");
             } catch (DownloadRemovalVetoException e) {
                 log.log("Removal vetoed for '" + d.getName() + "': " + e.getMessage());
             } catch (DownloadException e) {
