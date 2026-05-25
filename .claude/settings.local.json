@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir C:\\\\Code\\\\BTClearOld)",
+      "Bash(java -version)",
+      "Bash(ant -version)",
+      "WebFetch(domain:search.maven.org)",
+      "WebFetch(domain:api.github.com)",
+      "PowerShell(Get-Item *)",
+      "PowerShell(New-Item *)",
+      "PowerShell(Get-Command *)",
+      "PowerShell(Select-String *)",
+      "PowerShell($jdk = 'C:\\\\Program Files\\\\Java\\\\jdk-25\\\\bin'; $jar = \"$jdk\\\\jar.exe\"; & $jar --list --file 'C:\\\\Code\\\\BTClearOld\\\\lib\\\\BiglyBT.jar' | Select-String -Pattern 'plugin\\\\.properties$|plugins/[^/]+/[^/]+\\\\.class$' | Select-Object -First 30)",
+      "PowerShell(Remove-Item *)",
+      "PowerShell(Copy-Item *)"
+    ]
+  }
+}

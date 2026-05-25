@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="BTClearOld" default="jar" basedir=".">
+
+    <property name="plugin.id"   value="btclearold"/>
+    <property name="src.dir"     value="src"/>
+    <property name="lib.dir"     value="lib"/>
+    <property name="build.dir"   value="build"/>
+    <property name="classes.dir" value="${build.dir}/classes"/>
+    <property name="dist.dir"    value="dist"/>
+
+    <path id="classpath">
+        <fileset dir="${lib.dir}" includes="*.jar"/>
+    </path>
+
+    <target name="clean">
+        <delete dir="${build.dir}"/>
+        <delete dir="${dist.dir}"/>
+    </target>
+
+    <target name="check-lib">
+        <available file="${lib.dir}" type="dir" property="lib.exists"/>
+        <fail unless="lib.exists">
+            Missing ${lib.dir}/. Drop BiglyBT.jar (or the core plugin API jar) into ${lib.dir}/
+            before building. On a typical install BiglyBT.jar lives next to the BiglyBT executable.
+        </fail>
+    </target>
+
+    <target name="compile" depends="check-lib">
+        <mkdir dir="${classes.dir}"/>
+        <javac srcdir="${src.dir}"
+               destdir="${classes.dir}"
+               classpathref="classpath"
+               source="11"
+               target="11"
+               includeantruntime="false"
+               debug="true"
+               encoding="UTF-8"/>
+        <copy todir="${classes.dir}">
+            <fileset dir="${src.dir}">
+                <exclude name="**/*.java"/>
+            </fileset>
+        </copy>
+    </target>
+
+    <target name="jar" depends="compile">
+        <mkdir dir="${dist.dir}"/>
+        <jar destfile="${dist.dir}/${plugin.id}_${DSTAMP}.jar">
+            <fileset dir="${classes.dir}"/>
+            <fileset file="plugin.properties"/>
+        </jar>
+        <jar destfile="${dist.dir}/${plugin.id}.jar">
+            <fileset dir="${classes.dir}"/>
+            <fileset file="plugin.properties"/>
+        </jar>
+        <echo>Built ${dist.dir}/${plugin.id}.jar</echo>
+    </target>
+
+</project>
